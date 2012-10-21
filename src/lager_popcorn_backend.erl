@@ -21,6 +21,8 @@ init(Params) ->
     Popcorn_Host = config_val(popcorn_host, Params, "localhost"),
     Popcorn_Port = config_val(popcorn_port, Params, 9125),
 
+    ok = protobuffs_compile:scan("include/popcorn.proto"),
+
     {ok, Socket} = gen_udp:open(0, [list]),
 
     {ok, #state{socket       = Socket,
