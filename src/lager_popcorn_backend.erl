@@ -10,7 +10,8 @@
          code_change/3
 ]).
 
--record(state, {level         :: atom(),
+-record(state, {socket,
+                level         :: atom(),
                 popcorn_host  :: string(),
                 popcorn_port  :: number()
 }).
@@ -20,7 +21,10 @@ init(Params) ->
     Popcorn_Host = config_val(popcorn_host, Params, "localhost"),
     Popcorn_Port = config_val(popcorn_port, Params, 9125),
 
-    {ok, #state{level        = Level,
+    {ok, Socket} = gen_udp:open(0, [list]),
+
+    {ok, #state{socket       = Socket,
+                level        = Level,
                 popcorn_host = Popcorn_Host,
                 popcorn_port = Popcorn_Port}}.
 
@@ -30,12 +34,16 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(get_loglevel, State) ->
     {ok, State#state.level, State};
 
-handle_call(_Request, State) ->
-    {ok, not_implemented, State}.
+handle_call(Request, State) ->
+    {ok, ok, State}.
 
-handle_event({log, Dest, Level, {Date, Time}, Message}, State) ->
-    io:format("Log message: ~p\n", [Message]),
-    {ok, undefined};
+handle_event({log, {lager_msg, _, _, Severity, {_Date, _Time}, Message}}, State) ->
+    gen_udp:send(State#state.socket,
+                 State#state.popcorn_host,
+                 State#state.popcorn_port,
+                 lists:flatten(Message)),
+
+    {ok, State};
 
 handle_event(_Event, State) ->
     {ok, State}.
@@ -57,4 +65,5 @@ config_val(C, Params, Default) ->
         {C, V} -> V;
         _      -> Default
     end.
+
 
