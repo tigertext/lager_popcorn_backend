@@ -21,8 +21,6 @@ init(Params) ->
     Popcorn_Host = config_val(popcorn_host, Params, "localhost"),
     Popcorn_Port = config_val(popcorn_port, Params, 9125),
 
-    ok = protobuffs_compile:scan("include/popcorn.proto"),
-
     {ok, Socket} = gen_udp:open(0, [list]),
 
     {ok, #state{socket       = Socket,
@@ -39,11 +37,13 @@ handle_call(get_loglevel, State) ->
 handle_call(Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, {lager_msg, _, _, Severity, {_Date, _Time}, Message}}, State) ->
+handle_event({log, {lager_msg, _, _, Severity, {Date, Time}, Message}}, State) ->
+    Encoded_Message = encode_protobuffs_message(node(), Severity, Date, Time, Message),
+
     gen_udp:send(State#state.socket,
                  State#state.popcorn_host,
                  State#state.popcorn_port,
-                 lists:flatten(Message)),
+                 Encoded_Message),
 
     {ok, State};
 
@@ -67,5 +67,12 @@ config_val(C, Params, Default) ->
         {C, V} -> V;
         _      -> Default
     end.
+
+encode_protobuffs_message(Node, Severity, Date, Time, Message) ->
+    erlang:iolist_to_binary([
+        protobuffs:encode(1, atom_to_list(Node), string),
+        protobuffs:encode(2, lager_util:level_to_num(Severity), uint32),
+        protobuffs:encode(3, Message, string)
+    ]).
 
 
