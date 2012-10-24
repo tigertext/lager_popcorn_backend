@@ -13,20 +13,26 @@
 -record(state, {socket,
                 level         :: atom(),
                 popcorn_host  :: string(),
-                popcorn_port  :: number()
+                popcorn_port  :: number(),
+                node_role     :: string(),
+                node_version  :: string()
 }).
 
 init(Params) ->
-    Level        = config_val(level, Params, debug),
-    Popcorn_Host = config_val(popcorn_host, Params, "localhost"),
-    Popcorn_Port = config_val(popcorn_port, Params, 9125),
+    Level        = proplists:get_value(level, Params, debug),
+    Popcorn_Host = proplists:get_value(popcorn_host, Params, "localhost"),
+    Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
+    Node_Role    = proplists:get_value(node_role, Params, "no_role"),
+    Node_Version = proplists:get_value(node_version, Params, "no_version"),
 
     {ok, Socket} = gen_udp:open(0, [list]),
 
     {ok, #state{socket       = Socket,
                 level        = Level,
                 popcorn_host = Popcorn_Host,
-                popcorn_port = Popcorn_Port}}.
+                popcorn_port = Popcorn_Port,
+                node_role    = Node_Role,
+                node_version = Node_Version}}.
 
 handle_call({set_loglevel, Level}, State) ->
     {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
@@ -34,11 +40,11 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(get_loglevel, State) ->
     {ok, State#state.level, State};
 
-handle_call(Request, State) ->
+handle_call(_Request, State) ->
     {ok, ok, State}.
 
 handle_event({log, {lager_msg, _, _, Severity, {Date, Time}, Message}}, State) ->
-    Encoded_Message = encode_protobuffs_message(node(), Severity, Date, Time, Message),
+    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message),
 
     gen_udp:send(State#state.socket,
                  State#state.popcorn_host,
@@ -57,22 +63,16 @@ terminate(_Reason, _State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
+    %% TODO version number should be read here, or else we don't support upgrades
     {ok, State}.
 
-
-%%
-%% get a value from the application config
-config_val(C, Params, Default) ->
-    case lists:keyfind(C, 1, Params) of
-        {C, V} -> V;
-        _      -> Default
-    end.
-
-encode_protobuffs_message(Node, Severity, Date, Time, Message) ->
+encode_protobuffs_message(Node, Node_Role, Node_Version, Severity, _Date, _Time, Message) ->
     erlang:iolist_to_binary([
         protobuffs:encode(1, atom_to_list(Node), string),
-        protobuffs:encode(2, lager_util:level_to_num(Severity), uint32),
-        protobuffs:encode(3, Message, string)
+        protobuffs:encode(2, Node_Role, string),
+        protobuffs:encode(3, Node_Version, string),
+        protobuffs:encode(4, lager_util:level_to_num(Severity), uint32),
+        protobuffs:encode(5, Message, string)
     ]).
 
 
