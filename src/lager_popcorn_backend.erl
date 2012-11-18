@@ -43,8 +43,13 @@ handle_call(get_loglevel, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, {lager_msg, _, _, Severity, {Date, Time}, Message}}, State) ->
-    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message),
+handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, State) ->
+    Module = proplists:get_value(module, Metadata),
+    Function = proplists:get_value(function, Metadata),
+    Line = proplists:get_value(line, Metadata),
+    Pid = proplists:get_value(pid, Metadata),
+    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message,
+                                                Module, Function, Line, Pid),
 
     gen_udp:send(State#state.socket,
                  State#state.popcorn_host,
@@ -66,13 +71,25 @@ code_change(_OldVsn, State, _Extra) ->
     %% TODO version number should be read here, or else we don't support upgrades
     {ok, State}.
 
-encode_protobuffs_message(Node, Node_Role, Node_Version, Severity, _Date, _Time, Message) ->
+encode_protobuffs_message(Node, Node_Role, Node_Version, Severity, _Date, _Time, Message,
+        Module, Function, Line, Pid) ->
     erlang:iolist_to_binary([
         protobuffs:encode(1, atom_to_list(Node), string),
         protobuffs:encode(2, Node_Role, string),
         protobuffs:encode(3, Node_Version, string),
         protobuffs:encode(4, lager_util:level_to_num(Severity), uint32),
-        protobuffs:encode(5, Message, string)
+        protobuffs:encode(5, Message, string),
+        protobuffs:encode(6, opt(Module, <<"">>), string),
+        protobuffs:encode(7, opt(Function, <<"">>), string),
+        protobuffs:encode(8, opt(Line, <<"">>), string),
+        protobuffs:encode(9, opt(Pid, <<"">>), string)
     ]).
 
-
+%% Return the protobufs data for optional fields
+opt(undefined, Default) -> Default;
+opt(Value, _) when is_integer(Value) -> list_to_binary(integer_to_list(Value));
+opt(Value, _) when is_pid(Value)     -> list_to_binary(pid_to_list(Value));
+opt(Value, _) when is_atom(Value)    -> list_to_binary(atom_to_list(Value));
+opt(Value, _) when is_binary(Value)  -> Value;
+opt(Value, _) when is_list(Value)    -> list_to_binary(Value);
+opt(_, Default) -> Default.
