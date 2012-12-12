@@ -10,6 +10,8 @@
          code_change/3
 ]).
 
+-include_lib("lager/include/lager.hrl").
+
 -record(state, {socket,
                 level         :: atom(),
                 popcorn_host  :: string(),
@@ -24,7 +26,7 @@ init(Params) ->
     Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
     Node_Role    = proplists:get_value(node_role, Params, "no_role"),
     Node_Version = proplists:get_value(node_version, Params, "no_version"),
-
+    
     {ok, Socket} = gen_udp:open(0, [list]),
 
     {ok, #state{socket       = Socket,
@@ -41,14 +43,12 @@ handle_call(get_loglevel, State) ->
     {ok, State#state.level, State};
 
 handle_call(_Request, State) ->
+   io:format("Other call3~n"),
     {ok, ok, State}.
 
-handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, State) ->
-    Module = proplists:get_value(module, Metadata),
-    Function = proplists:get_value(function, Metadata),
-    Line = proplists:get_value(line, Metadata),
-    Pid = proplists:get_value(pid, Metadata),
-    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message,
+handle_event({lager_event, #lager_event{module=Module, function=Function, line=Line,
+                                        pid=Pid, message=Message, level=Level}}, State) ->
+    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Level, "", "", Message,
                                                 Module, Function, Line, Pid),
 
     gen_udp:send(State#state.socket,
@@ -62,6 +62,7 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 handle_info(_Info, State) ->
+   io:format("Other info~n"),
     {ok, State}.
 
 terminate(_Reason, _State) ->
