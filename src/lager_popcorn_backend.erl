@@ -69,7 +69,13 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     %% TODO version number should be read here, or else we don't support upgrades
-    {ok, State}.
+    [App,Host] = string:tokens(atom_to_list(node()), "@"),
+    Apps = application:which_applications(),
+    Vsn = case proplists:lookup(list_to_atom(App), Apps) of
+        none -> "no_version";
+        {_, _, V} -> V
+    end,
+    {ok, State#state{node_version=Vsn}}.
 
 encode_protobuffs_message(Node, Node_Role, Node_Version, Severity, _Date, _Time, Message,
         Module, Function, Line, Pid) ->
