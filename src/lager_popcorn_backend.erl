@@ -7,7 +7,8 @@
          handle_event/2,
          handle_info/2,
          terminate/2,
-         code_change/3
+         code_change/3,
+         get_app_version/0
 ]).
 
 -record(state, {socket,
@@ -23,7 +24,7 @@ init(Params) ->
     Popcorn_Host = proplists:get_value(popcorn_host, Params, "localhost"),
     Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
     Node_Role    = proplists:get_value(node_role, Params, "no_role"),
-    Node_Version = proplists:get_value(node_version, Params, "no_version"),
+    Node_Version = get_app_version(),
 
     {ok, Socket} = gen_udp:open(0, [list]),
 
@@ -69,12 +70,7 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     %% TODO version number should be read here, or else we don't support upgrades
-    [App,Host] = string:tokens(atom_to_list(node()), "@"),
-    Apps = application:which_applications(),
-    Vsn = case proplists:lookup(list_to_atom(App), Apps) of
-        none -> "no_version";
-        {_, _, V} -> V
-    end,
+    Vsn = get_app_version(),
     {ok, State#state{node_version=Vsn}}.
 
 encode_protobuffs_message(Node, Node_Role, Node_Version, Severity, _Date, _Time, Message,
@@ -99,3 +95,11 @@ opt(Value, _) when is_atom(Value)    -> list_to_binary(atom_to_list(Value));
 opt(Value, _) when is_binary(Value)  -> Value;
 opt(Value, _) when is_list(Value)    -> list_to_binary(Value);
 opt(_, Default) -> Default.
+
+get_app_version() ->
+    [App,Host] = string:tokens(atom_to_list(node()), "@"),
+    Apps = application:which_applications(),
+    Vsn = case proplists:lookup(list_to_atom(App), Apps) of
+        none -> "no_version";
+        {_, _, V} -> V
+    end.
