@@ -24,7 +24,7 @@ init(Params) ->
     Popcorn_Host = proplists:get_value(popcorn_host, Params, "localhost"),
     Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
     Node_Role    = proplists:get_value(node_role, Params, "no_role"),
-    Node_Version = get_app_version(),
+    Node_Version = proplists:get_value(node_version, Params, "no_version"),
 
     {ok, Socket} = gen_udp:open(0, [list]),
 
