@@ -4,6 +4,8 @@ Enables lager to publish live logging data to popcorn.
 
 In the app.config add a lager_popcorn_backend entry to the lager config.
 
+The app version number and hostname is determined at runtime. 
+
 Example:
 
 ```
@@ -18,9 +20,7 @@ Example:
                  {level,            debug},
                  {popcorn_host,     "hostname"},
                  {popcorn_port,     9125},
-                 {node_role,        "product.webserver"},
-                 {node_app,         web1},
-                 {node_version,     "0.0.9"}
+                 {node_role,        "webserver"}
              ]}
   ]}
  ]},
