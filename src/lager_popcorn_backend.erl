@@ -20,7 +20,7 @@
 }).
 
 init(Params) ->
-    Level        = proplists:get_value(level, Params, debug),
+    Level        = lager_util:level_to_num(proplists:get_value(level, Params, debug)),
     Popcorn_Host = proplists:get_value(popcorn_host, Params, "localhost"),
     Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
     Node_Role    = proplists:get_value(node_role, Params, "no_role"),
@@ -44,19 +44,21 @@ handle_call(get_loglevel, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, State) ->
-    Module = proplists:get_value(module, Metadata),
-    Function = proplists:get_value(function, Metadata),
-    Line = proplists:get_value(line, Metadata),
-    Pid = proplists:get_value(pid, Metadata),
-    Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message,
+handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #state{level=L}=State) ->
+    case lager_util:level_to_num(Severity) =< L of
+        true ->
+            Module = proplists:get_value(module, Metadata),
+            Function = proplists:get_value(function, Metadata),
+            Line = proplists:get_value(line, Metadata),
+            Pid = proplists:get_value(pid, Metadata),
+            Encoded_Message = encode_protobuffs_message(node(), State#state.node_role, State#state.node_version, Severity, Date, Time, Message,
                                                 Module, Function, Line, Pid),
-
-    gen_udp:send(State#state.socket,
-                 State#state.popcorn_host,
-                 State#state.popcorn_port,
-                 Encoded_Message),
-
+            gen_udp:send(State#state.socket,
+                         State#state.popcorn_host,
+                         State#state.popcorn_port,
+                         Encoded_Message);
+         _ -> ok
+    end,     
     {ok, State};
 
 handle_event(_Event, State) ->
