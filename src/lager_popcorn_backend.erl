@@ -63,13 +63,23 @@ handle_event({log, {lager_msg, Q, Metadata, Severity, {Date, Time}, _, Message}}
 handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #state{level=L}=State) ->
     case lager_util:level_to_num(Severity) =< L of
         true ->
-            Module = proplists:get_value(module, Metadata),
-            Function = proplists:get_value(function, Metadata),
-            Line = proplists:get_value(line, Metadata),
-            Pid = proplists:get_value(pid, Metadata),
+            Module         = proplists:get_value(module, Metadata),
+            Function       = proplists:get_value(function, Metadata),
+            Line           = proplists:get_value(line, Metadata),
+            Pid            = proplists:get_value(pid, Metadata),
+            Account_Token  = proplists:get_value(account_token, Metadata),
+            Client         = proplists:get_value(client, Metadata),
+            Client_Os      = proplists:get_value(client_os, Metadata),
+            Client_Version = proplists:get_value(client_version, Metadata),
+            Os_Version     = proplists:get_value(os_version, Metadata),
+            %% encode using protobuffs
+            io:fwrite("Metadata ~p ~n", [Metadata]),
+
+
             Encoded_Message = encode_protobuffs_message(State#state.lager_level_type,
                                                         node(), State#state.node_role, State#state.node_version, Severity, Date,
-                                                        Time, Message, Module, Function, Line, Pid),
+                                                        Time, Message, Module, Function, Line, Pid,
+                                                        Account_Token, Client,Client_Os, Client_Version, Os_Version),
             gen_udp:send(State#state.socket,
                          State#state.popcorn_host,
                          State#state.popcorn_port,
@@ -92,13 +102,16 @@ code_change(_OldVsn, State, _Extra) ->
     Vsn = get_app_version(),
     {ok, State#state{node_version=Vsn}}.
 
-encode_protobuffs_message('unknown', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
-    encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid);
-encode_protobuffs_message('number', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
+
+
+encode_protobuffs_message('unknown', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version) ->
+    encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version);
+encode_protobuffs_message('number', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version) ->
     %% convert the number to a mask
     Mask = lager_severity_to_mask(Severity),
-    encode_protobuffs_message('number', Node, Node_Role, Node_Version, Mask, _Date, _Time, Message, Module, Function, Line, Pid);
-encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
+    encode_protobuffs_message('number', Node, Node_Role, Node_Version, Mask, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version);
+encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version) ->
+    %% encode protobuff log_message, log_client
     erlang:iolist_to_binary([
         protobuffs:encode(1, 1, uint32),   %% Packet version
         protobuffs:encode(2, atom_to_list(Node), string),
@@ -109,7 +122,12 @@ encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date
         protobuffs:encode(7, opt(Module, <<"">>), string),
         protobuffs:encode(8, opt(Function, <<"">>), string),
         protobuffs:encode(9, opt(Line, <<"">>), string),
-        protobuffs:encode(10, opt(Pid, <<"">>), string)
+        protobuffs:encode(10, opt(Pid, <<"">>), string),
+        protobuffs:encode(11, opt(Account_Token, <<"">>), string),
+        protobuffs:encode(12, opt(Client, <<"">>), string),
+        protobuffs:encode(13, opt(Client_Os, <<"">>), string),
+        protobuffs:encode(14, opt(Client_Version, <<"">>), string),
+        protobuffs:encode(15, opt(Os_Version, <<"">>), string)
     ]).
 
 %% Return the protobufs data for optional fields
