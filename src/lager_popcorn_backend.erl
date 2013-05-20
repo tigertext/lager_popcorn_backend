@@ -71,32 +71,32 @@ handle_event({log, {lager_msg, _, Metadata, Severity, {_Date, _Time}, Message}},
                                    opt(proplists:get_value(Token, Metadata), <<"">>)
                            end,
             
-            ClientLog = #log_client{account_token = Get_Metadata(account_token),
-                                    type          = Get_Metadata(client),
-                                    version       = Get_Metadata(client_version), 
-                                    os            = Get_Metadata(client_os),
-                                    os_version    = Get_Metadata(os_version)},
+            ClientLog = #log_client_proto{account_token = Get_Metadata(account_token),
+                                          type          = Get_Metadata(client),
+                                          version       = Get_Metadata(client_version), 
+                                          os            = Get_Metadata(client_os),
+                                          os_version    = Get_Metadata(os_version)},
             
-            MessageLog = #log_message{version      = 1,
-                                      node         = atom_to_list(node()),
-                                      node_role    = State#state.node_role,
-                                      node_version = State#state.node_version,
-                                      severity     = case State#state.lager_level_type of 
-                                                         'unknown' -> lager_util:level_to_number(Severity);
-                                                         'number'  -> lager_util:level_to_number(lager_severity_to_mask(Severity));
-                                                         'mask'    -> lager_util:level_to_number(Severity)
-                                                     end,
-                                      message      = Message,
-                                      module       = Get_Metadata(module),
-                                      function     = Get_Metadata(function),
-                                      line         = Get_Metadata(line),
-                                      pid          = Get_Metadata(pid),
-                                      client       = ClientLog },
+            MessageLog = #log_message_proto{version      = 1,
+                                            node         = atom_to_list(node()),
+                                            node_role    = State#state.node_role,
+                                            node_version = State#state.node_version,
+                                            severity     = case State#state.lager_level_type of 
+                                                               'unknown' -> lager_util:level_to_number(Severity);
+                                                               'number'  -> lager_util:level_to_number(lager_severity_to_mask(Severity));
+                                                               'mask'    -> lager_util:level_to_number(Severity)
+                                                           end,
+                                            message      = Message,
+                                            module       = Get_Metadata(module),
+                                            function     = Get_Metadata(function),
+                                            line         = Get_Metadata(line),
+                                            pid          = Get_Metadata(pid),
+                                            client       = ClientLog },
             
             gen_udp:send(State#state.socket,
                          State#state.popcorn_host,
                          State#state.popcorn_port,
-                         iolist_to_binary(popcorn_pb:encode_log_message(MessageLog)));
+                         iolist_to_binary(popcorn_pb:encode_log_message_proto(MessageLog)));
          _ -> ok
     end,
     {ok, State};
