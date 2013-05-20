@@ -2,7 +2,7 @@
 -author('marc.e.campbell@gmail.com').
 -behaviour(gen_event).
 
--include("deps/popcorn_proto/include/popcorn_pb.hrl").
+-include_lib("popcorn_proto/include/popcorn_pb.hrl").
 
 
 -export([init/1,
