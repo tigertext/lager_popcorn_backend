@@ -109,7 +109,7 @@ encode_protobuffs_message('unknown', Node, Node_Role, Node_Version, Severity, _D
 encode_protobuffs_message('number', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version) ->
     %% convert the number to a mask
     Mask = lager_severity_to_mask(Severity),
-    encode_protobuffs_message('number', Node, Node_Role, Node_Version, Mask, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version);
+    encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Mask, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version);
 encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid, Account_Token, Client, Client_Os, Client_Version, Os_Version) ->
     %% encode protobuff log_message, log_client
     erlang:iolist_to_binary([
