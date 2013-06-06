@@ -82,9 +82,9 @@ handle_event({log, {lager_msg, _, Metadata, Severity, {_Date, _Time}, Message}},
                                             node_role    = State#state.node_role,
                                             node_version = State#state.node_version,
                                             severity     = case State#state.lager_level_type of 
-                                                               'unknown' -> lager_util:level_to_number(Severity);
-                                                               'number'  -> lager_util:level_to_number(lager_severity_to_mask(Severity));
-                                                               'mask'    -> lager_util:level_to_number(Severity)
+                                                               'unknown' -> lager_util:level_to_num(Severity);
+                                                               'number'  -> lager_util:level_to_num(lager_severity_to_mask(Severity));
+                                                               'mask'    -> lager_util:level_to_num(Severity)
                                                            end,
                                             message      = Message,
                                             module       = Get_Metadata(module),
