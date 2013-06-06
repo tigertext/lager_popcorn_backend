@@ -1,5 +1,0 @@
-message Log_Message {
-    required string node = 1;
-    required int32 severity = 2;
-    required string message = 3;
-}

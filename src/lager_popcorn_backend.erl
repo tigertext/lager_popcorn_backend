@@ -2,6 +2,9 @@
 -author('marc.e.campbell@gmail.com').
 -behaviour(gen_event).
 
+-include_lib("popcorn_proto/include/popcorn_pb.hrl").
+
+
 -export([init/1,
          handle_call/2,
          handle_event/2,
@@ -35,7 +38,7 @@ init(Params) ->
     Level        = lager_util:level_to_num(proplists:get_value(level, Params, debug)),
     Popcorn_Host = proplists:get_value(popcorn_host, Params, "localhost"),
     Popcorn_Port = proplists:get_value(popcorn_port, Params, 9125),
-    Node_Role    = proplists:get_value(node_role, Params, "no_role"),
+    Node_Role    = proplists:get_value(node_role,    Params, "no_role"),
     Node_Version = proplists:get_value(node_version, Params, "no_version"),
 
     {ok, Socket} = gen_udp:open(0, [list]),
@@ -60,20 +63,40 @@ handle_call(_Request, State) ->
 handle_event({log, {lager_msg, Q, Metadata, Severity, {Date, Time}, _, Message}}, State) ->
     handle_event({log, {lager_msg, Q, Metadata, Severity, {Date, Time}, Message}}, State);
 
-handle_event({log, {lager_msg, _, Metadata, Severity, {Date, Time}, Message}}, #state{level=L}=State) ->
+handle_event({log, {lager_msg, _, Metadata, Severity, {_Date, _Time}, Message}}, #state{level=L}=State) ->
     case lager_util:level_to_num(Severity) =< L of
         true ->
-            Module = proplists:get_value(module, Metadata),
-            Function = proplists:get_value(function, Metadata),
-            Line = proplists:get_value(line, Metadata),
-            Pid = proplists:get_value(pid, Metadata),
-            Encoded_Message = encode_protobuffs_message(State#state.lager_level_type,
-                                                        node(), State#state.node_role, State#state.node_version, Severity, Date,
-                                                        Time, Message, Module, Function, Line, Pid),
+
+            Get_Metadata = fun(Token) ->
+                                   opt(proplists:get_value(Token, Metadata), <<"">>)
+                           end,
+            
+            ClientLog = #log_client_proto{account_token = Get_Metadata(account_token),
+                                          type          = Get_Metadata(client),
+                                          version       = Get_Metadata(client_version), 
+                                          os            = Get_Metadata(client_os),
+                                          os_version    = Get_Metadata(os_version)},
+            
+            MessageLog = #log_message_proto{version      = 1,
+                                            node         = atom_to_list(node()),
+                                            node_role    = State#state.node_role,
+                                            node_version = State#state.node_version,
+                                            severity     = case State#state.lager_level_type of 
+                                                               'unknown' -> lager_util:level_to_number(Severity);
+                                                               'number'  -> lager_util:level_to_number(lager_severity_to_mask(Severity));
+                                                               'mask'    -> lager_util:level_to_number(Severity)
+                                                           end,
+                                            message      = Message,
+                                            module       = Get_Metadata(module),
+                                            function     = Get_Metadata(function),
+                                            line         = Get_Metadata(line),
+                                            pid          = Get_Metadata(pid),
+                                            client       = ClientLog },
+            
             gen_udp:send(State#state.socket,
                          State#state.popcorn_host,
                          State#state.popcorn_port,
-                         Encoded_Message);
+                         iolist_to_binary(popcorn_pb:encode_log_message_proto(MessageLog)));
          _ -> ok
     end,
     {ok, State};
@@ -92,25 +115,6 @@ code_change(_OldVsn, State, _Extra) ->
     Vsn = get_app_version(),
     {ok, State#state{node_version=Vsn}}.
 
-encode_protobuffs_message('unknown', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
-    encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid);
-encode_protobuffs_message('number', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
-    %% convert the number to a mask
-    Mask = lager_severity_to_mask(Severity),
-    encode_protobuffs_message('number', Node, Node_Role, Node_Version, Mask, _Date, _Time, Message, Module, Function, Line, Pid);
-encode_protobuffs_message('mask', Node, Node_Role, Node_Version, Severity, _Date, _Time, Message, Module, Function, Line, Pid) ->
-    erlang:iolist_to_binary([
-        protobuffs:encode(1, 1, uint32),   %% Packet version
-        protobuffs:encode(2, atom_to_list(Node), string),
-        protobuffs:encode(3, Node_Role, string),
-        protobuffs:encode(4, Node_Version, string),
-        protobuffs:encode(5, lager_util:level_to_num(Severity), uint32),
-        protobuffs:encode(6, Message, string),
-        protobuffs:encode(7, opt(Module, <<"">>), string),
-        protobuffs:encode(8, opt(Function, <<"">>), string),
-        protobuffs:encode(9, opt(Line, <<"">>), string),
-        protobuffs:encode(10, opt(Pid, <<"">>), string)
-    ]).
 
 %% Return the protobufs data for optional fields
 opt(undefined, Default) -> Default;
@@ -122,9 +126,9 @@ opt(Value, _) when is_list(Value)    -> list_to_binary(Value);
 opt(_, Default) -> Default.
 
 get_app_version() ->
-    [App,Host] = string:tokens(atom_to_list(node()), "@"),
+    [App, _Host] = string:tokens(atom_to_list(node()), "@"),
     Apps = application:which_applications(),
-    Vsn = case proplists:lookup(list_to_atom(App), Apps) of
+    _Vsn = case proplists:lookup(list_to_atom(App), Apps) of
         none -> "no_version";
         {_, _, V} -> V
     end.
